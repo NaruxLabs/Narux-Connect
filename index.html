@@ -30,7 +30,7 @@ input,select,textarea{width:100%;font-family:inherit;background:var(--bg);border
 label{font-size:14px;color:var(--mute)}
 .tag{display:inline-block;font-size:13px;font-weight:600;padding:2px 9px;border-radius:99px;background:var(--amber);color:#2b1d00}
 .tag.g{background:var(--line);color:var(--ink)}
-.tabs{display:flex;gap:6px;margin:16px 0;overflow-x:auto}.av{width:44px;height:44px;border-radius:50%;background:var(--pitch);color:var(--on);display:flex;align-items:center;justify-content:center;font-weight:800;flex:none}.tabs button{flex:1;white-space:nowrap;padding:8px 10px;background:transparent;color:var(--ink);border:1px solid var(--line)}
+.tabs{display:flex;gap:6px;margin:16px 0;overflow-x:auto}img.av{object-fit:cover}.av{width:44px;height:44px;border-radius:50%;background:var(--pitch);color:var(--on);display:flex;align-items:center;justify-content:center;font-weight:800;flex:none}.tabs button{flex:1;white-space:nowrap;padding:8px 10px;background:transparent;color:var(--ink);border:1px solid var(--line)}
 .tabs button.on{background:var(--pitch);color:var(--on);border-color:var(--pitch)}
 .sc{display:flex;gap:6px;align-items:center}.sc input{width:56px;text-align:center;margin:0}
 table{width:100%;border-collapse:collapse;font-size:15px}th,td{padding:8px 4px;text-align:right;border-bottom:1px solid var(--line)}
@@ -58,10 +58,11 @@ async function loadT(){
     sb.from('teams').select('*').eq('tournament_id',id).order('created_at'),
     sb.from('fixtures').select('*').eq('tournament_id',id).order('created_at'),
     sb.from('standings').select('*').eq('tournament_id',id),
-    S.user?sb.from('team_private').select('team_id,phone'):Promise.resolve({data:[]})]);
-  for(var i=0;i<5;i++)if(r[i].error)return err(r[i].error);
+    S.user?sb.from('team_private').select('team_id,phone'):Promise.resolve({data:[]}),
+    sb.from('announcements').select('*').eq('tournament_id',id).order('created_at',{ascending:false}).limit(5)]);
+  for(var i=0;i<6;i++)if(r[i].error)return err(r[i].error);
   if(!r[0].data){S.msg='Tournament not found.';S.tid=null;return loadList()}
-  var pv={};(r[4].data||[]).forEach(function(x){pv[x.team_id]=x.phone});S.d={pv:pv,t:r[0].data,teams:r[1].data,fx:r[2].data,st:r[3].data};render()}
+  var pv={};(r[4].data||[]).forEach(function(x){pv[x.team_id]=x.phone});S.d={an:r[5].data||[],pv:pv,t:r[0].data,teams:r[1].data,fx:r[2].data,st:r[3].data};render()}
 function route(){S.view=null;S.tid=location.hash.slice(1)||null;S.msg='';S.tab='teams';S.tid?loadT():loadList()}
 function open_(id){location.hash=id}
 function home(){history.pushState('',document.title,location.pathname);route()}
@@ -83,29 +84,45 @@ async function createT(){
 async function join(){
   var t=S.d.t,n=v('jn'),g=v('ji');if(!n||!g)return err('Enter a team name and '+idLabel(t.game)+'.');
   var guest=$('jg')&&$('jg').checked;
-  var r=await sb.from('teams').insert({tournament_id:t.id,name:n,game_id:g,country:v('jc')||null,owner_id:guest?null:S.user.id}).select('id').single();
-  if(r.error)return err(r.error.code==='23505'?'That team name or ID is already registered.':r.error);var ph=v('jp');if(ph){var q=await sb.from('team_private').insert({team_id:r.data.id,phone:ph});if(q.error)return err(q.error)}S.msg='';loadT()}
+  var r=await sb.from('teams').insert({tournament_id:t.id,name:n,game_id:g,country:cname(v('jc')),owner_id:guest?null:S.user.id}).select('id').single();
+  if(r.error)return err(r.error.code==='23505'?'That team name or ID is already registered.':r.error);var ph=v('jp').replace(/\D/g,'').replace(/^0+/,'');ph=ph?'+'+codeOf(v('jc'))+ph:'';if(ph){var q=await sb.from('team_private').insert({team_id:r.data.id,phone:ph});if(q.error)return err(q.error)}S.msg='';loadT()}
 async function rpc(fn,args){var r=await sb.rpc(fn,args);if(r.error)return err(r.error);S.msg='';loadT()}
 function startT(){rpc('start_tournament',{t:S.tid})}
 function submit_(f){var h=num('h'+f),a=num('a'+f);if(h===null||a===null||isNaN(h)||isNaN(a))return err('Enter both scores.');rpc('submit_result',{f:f,h:h,a:a})}
 function confirm_(f){rpc('confirm_result',{f:f})}
 function dispute(f){rpc('dispute_result',{f:f})}
 function resolve(f){var h=num('h'+f),a=num('a'+f);if(h===null||a===null)return err('Enter the final score.');rpc('resolve_result',{f:f,h:h,a:a})}
+var DC='AF93 AL355 DZ213 AD376 AO244 AR54 AM374 AU61 AT43 AZ994 BS1242 BH973 BD880 BB1246 BY375 BE32 BZ501 BJ229 BT975 BO591 BA387 BW267 BR55 BN673 BG359 BF226 BI257 KH855 CM237 CA1 CV238 CF236 TD235 CL56 CN86 CO57 KM269 CG242 CD243 CR506 CI225 HR385 CU53 CY357 CZ420 DK45 DJ253 DM1767 DO1809 EC593 EG20 SV503 GQ240 ER291 EE372 SZ268 ET251 FJ679 FI358 FR33 GA241 GM220 GE995 DE49 GH233 GR30 GD1473 GT502 GN224 GW245 GY592 HT509 HN504 HU36 IS354 IN91 ID62 IR98 IQ964 IE353 IL972 IT39 JM1876 JP81 JO962 KZ7 KE254 KI686 KW965 KG996 LA856 LV371 LB961 LS266 LR231 LY218 LI423 LT370 LU352 MG261 MW265 MY60 MV960 ML223 MT356 MH692 MR222 MU230 MX52 FM691 MD373 MC377 MN976 ME382 MA212 MZ258 MM95 NA264 NR674 NP977 NL31 NZ64 NI505 NE227 NG234 KP850 MK389 NO47 OM968 PK92 PW680 PS970 PA507 PG675 PY595 PE51 PH63 PL48 PT351 QA974 RO40 RU7 RW250 KN1869 LC1758 VC1784 WS685 SM378 ST239 SA966 SN221 RS381 SC248 SL232 SG65 SK421 SI386 SB677 SO252 ZA27 KR82 SS211 ES34 LK94 SD249 SR597 SE46 CH41 SY963 TW886 TJ992 TZ255 TH66 TL670 TG228 TO676 TT1868 TN216 TR90 TM993 TV688 UG256 UA380 AE971 GB44 US1 UY598 UZ998 VU678 VA39 VE58 VN84 YE967 ZM260 ZW263'.split(' ').map(function(x){return{c:x.slice(0,2),d:x.slice(2)}});
+var CN;try{CN=new Intl.DisplayNames(['en'],{type:'region'})}catch(e){}
+function cname(i){try{return CN.of(i)}catch(e){return i}}
+function codeOf(i){var f=DC.find(function(x){return x.c===i});return f?f.d:''}
+function countryOpts(){return DC.map(function(x){return{c:x.c,n:cname(x.c)}}).sort(function(a,b){return a.n.localeCompare(b.n)}).map(function(o){return '<option value="'+o.c+'"'+(o.c==='TZ'?' selected':'')+'>'+esc(o.n)+'</option>'}).join('')}
+function onCountry(){$('pc').textContent='+'+codeOf(v('jc'))}
+async function joinCode(){var c=v('ic').toUpperCase();if(!c)return err('Enter the invitation code.');var r=await sb.from('tournaments').select('id').eq('invite_code',c).maybeSingle();if(r.error)return err(r.error);if(!r.data)return err('No tournament found with that code.');open_(r.data.id)}
+function pickLogo(id){var i=document.createElement('input');i.type='file';i.accept='image/*';i.onchange=function(){var f=i.files[0];if(!f)return;var im=new Image();im.onload=function(){var c=document.createElement('canvas');c.width=c.height=256;var x=c.getContext('2d'),m=Math.min(im.width,im.height);x.drawImage(im,(im.width-m)/2,(im.height-m)/2,m,m,0,0,256,256);c.toBlob(async function(b){var path=id+'-'+Date.now()+'.jpg';var u=await sb.storage.from('logos').upload(path,b,{contentType:'image/jpeg'});if(u.error)return err(u.error);var url=sb.storage.from('logos').getPublicUrl(path).data.publicUrl;var r=await sb.from('teams').update({logo_url:url}).eq('id',id);if(r.error)return err(r.error);loadT()},'image/jpeg',.85)};im.src=URL.createObjectURL(f)};i.click()}
+async function postNews(){var m=v('nm');if(!m)return err('Write the announcement first.');var r=await sb.from('announcements').insert({tournament_id:S.tid,message:m,warning:$('nw').checked});if(r.error)return err(r.error);S.msg='Posted. Players were notified.';loadT()}
+function newsHtml(d,org){return '<div class="card"><h3>Announcements</h3><div style="height:6px"></div>'+(d.an.length?d.an.map(function(a){return '<p style="margin:0 0 8px">'+(a.warning?'<span class="tag">Warning</span> ':'')+esc(a.message)+' <span class="mute">'+fmt(a.created_at)+'</span></p>'}).join(''):'<span class="mute">No announcements yet.</span>')+(org?'<div style="height:10px"></div><label for="nm">Post to all players</label><textarea id="nm" rows="2" maxlength="300"></textarea><label><input id="nw" type="checkbox" style="width:auto;min-height:0;margin:0 8px 0 0">Send as a warning</label><div style="height:10px"></div><button class="sm" onclick="postNews()">Post</button>':'')+'</div>'}
+function awardsHtml(){var d=S.d,cs={};d.fx.forEach(function(f){if(f.status!=='verified')return;if(f.away_score===0)cs[f.home_team]=(cs[f.home_team]||0)+1;if(f.home_score===0)cs[f.away_team]=(cs[f.away_team]||0)+1});
+  var P=d.st.filter(function(r){return r.played>0});
+  function board(t,sub,arr,val,unit){return '<div class="card"><h3>'+t+'</h3><div class="mute" style="margin-bottom:6px">'+sub+'</div>'+(arr.length?arr.slice(0,3).map(function(r,i){return '<div class="row"><span>'+(i+1)+'. '+esc(r.name)+'</span><strong>'+val(r)+' '+unit+'</strong></div>'}).join(''):'<span class="mute">No verified results yet.</span>')+'</div>'}
+  var a=P.slice().sort(function(x,y){return y.gf-x.gf}),b=P.slice().sort(function(x,y){return x.ga-y.ga||y.played-x.played}),c=P.map(function(r){return{name:r.name,n:cs[r.team_id]||0}}).sort(function(x,y){return y.n-x.n});
+  return '<h2 style="margin:18px 0 10px">Awards</h2>'+board('Golden Boot','Best attack: most goals scored',a,function(r){return r.gf},'goals')+board('Best Defender','Fewest goals conceded',b,function(r){return r.ga},'conceded')+board('Golden Glove','Most clean sheets',c,function(r){return r.n},'clean sheets')}
 function verify(f){rpc('verify_result',{f:f})}
 function saveRules(){sb.from('tournaments').update({rules:$('ru').value}).eq('id',S.tid).then(function(r){if(r.error)return err(r.error);S.msg='Rules saved.';loadT()})}
 async function loadNotes(){if(!S.user)return;var r=await sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(30);if(r.error)return;S.notes=r.data;S.unread=r.data.filter(function(n){return !n.read}).length;document.title=(S.unread?'('+S.unread+') ':'')+'Pre NaruxConnect';if(S.view==='notes')render();else if($('bell'))$('bell').textContent='\uD83D\uDD14 '+S.unread}
 async function toggleNotes(){if(S.view){S.view=null;render();return}S.view='notes';render();await sb.from('notifications').update({read:true}).eq('user_id',S.user.id).eq('read',false);S.unread=0;document.title='Pre NaruxConnect'}
 function notesHtml(){return '<div style="height:10px"></div><button class="sm alt" onclick="toggleNotes()">Back</button><h2 style="margin:14px 0 10px">Notifications</h2>'+(S.notes.length?S.notes.map(function(n){return '<div class="card" style="'+(n.read?'':'border-left:4px solid var(--amber)')+'"><div>'+esc(n.message)+'</div><div class="row" style="margin-top:6px"><span class="mute">'+fmt(n.created_at)+'</span>'+(n.tournament_id?'<button class="sm" onclick="S.view=null;open_(\''+n.tournament_id+'\');render()">Open</button>':'')+'</div></div>'}).join(''):'<div class="empty">No notifications yet.</div>')}
-function teamCard(x){var d=S.d,t=d.t,u=S.user,org=u&&u.id===t.organiser_id,priv=org||(u&&x.owner_id===u.id),ph=d.pv[x.id];
+function teamCard(x){var d=S.d,t=d.t,u=S.user,org=u&&u.id===t.organiser_id,own=u&&x.owner_id===u.id,mem=org||(u&&d.teams.some(function(y){return y.owner_id===u.id})),ph=d.pv[x.id];
   var st=d.st.find(function(r){return r.team_id===x.id}),rt=st&&st.played?Math.round(st.points/(st.played*3)*100)+'%':'-';
-  return '<div class="card"><div class="row" style="flex-wrap:nowrap;justify-content:flex-start"><div class="av">'+esc(x.name.slice(0,2).toUpperCase())+'</div><div style="flex:1;min-width:0"><strong>'+esc(x.name)+'</strong><div class="mute">'+esc(x.country||'Country not set')+' - Rating '+rt+'</div><div class="mute">'+(priv?idLabel(t.game)+': '+esc(x.game_id)+(ph?' - Phone: '+esc(ph):''):'Contact details are private')+'</div></div><span class="tag g">'+(t.status==='registration'?'Registered':'Active')+'</span>'+(org?'<button class="sm alt" onclick="removeTeam(\''+x.id+'\')">Remove</button>':'')+'</div></div>'}
+  var av=x.logo_url?'<img class="av" src="'+esc(x.logo_url)+'" alt="">':'<div class="av">'+esc(x.name.slice(0,2).toUpperCase())+'</div>';
+  return '<div class="card"><div class="row" style="flex-wrap:nowrap;justify-content:flex-start">'+av+'<div style="flex:1;min-width:0"><strong>'+esc(x.name)+'</strong><div class="mute">'+esc(x.country||'Country not set')+' - Rating '+rt+'</div><div class="mute">'+(mem?idLabel(t.game)+': '+esc(x.game_id)+(ph?' - Phone: <a href="tel:'+esc(ph)+'">'+esc(ph)+'</a>':''):'Join the tournament to see contact details')+'</div></div><span class="tag g">'+(t.status==='registration'?'Registered':'Active')+'</span></div>'+((own||org)?'<div class="row" style="margin-top:8px;justify-content:flex-start"><button class="sm alt" onclick="pickLogo(\''+x.id+'\')">Change logo</button>'+(org?'<button class="sm alt" onclick="removeTeam(\''+x.id+'\')">Remove</button>':'')+'</div>':'')+'</div>'}
 function fmt(x){return x?new Date(x).toLocaleString([],{dateStyle:'medium',timeStyle:'short'}):null}
 function iso(id){var x=$(id).value;return x?new Date(x).toISOString():null}
 function toLocal(x){if(!x)return '';var d=new Date(x),p=function(n){return String(n).padStart(2,'0')};return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())}
 function removeTeam(id){var t=S.d.teams.find(function(x){return x.id===id});if(!confirm('Remove '+t.name+'? Its fixtures will be deleted too.'))return;rpc('remove_team',{team:id})}
 function saveSched(f){var a=iso('s'+f),b=iso('d'+f);if(!a)return err('Choose the match date and time.');rpc('set_schedule',{f:f,sched:a,dl:b})}
 function autoSched(){var a=iso('as');if(!a)return err('Choose the first match date and time.');rpc('auto_schedule',{t:S.tid,first_at:a,per_day:parseInt($('ap').value,10)||1,dl_hours:parseInt($('ah').value,10)||24})}
-function copyInv(){var t=S.d.t,s=t.name+' ('+t.game+') - join here: '+location.href.split('#')[0]+'#'+t.id;
+function copyInv(){var t=S.d.t,s=t.name+' ('+t.game+') - join here: '+location.href.split('#')[0]+'#'+t.id+' or enter code '+t.code;
   try{navigator.clipboard.writeText(s);S.msg='Invitation copied. Paste it in WhatsApp.'}catch(e){S.msg=s}render()}
 function shareTable(){var d=S.d,rows=sorted(d.st),s=d.t.name+' - table\n';
   rows.forEach(function(r,i){s+=(i+1)+'. '+r.name+' P'+r.played+' GD'+r.gd+' Pts '+r.points+'\n'});
@@ -145,7 +162,7 @@ function render(){
   var top='<div class="row"><h1>Narux Connect</h1>'+(S.user?'<span><button class="sm alt" id="bell" onclick="toggleNotes()">\uD83D\uDD14 '+S.unread+'</button> <button class="sm alt" onclick="logout()">Log out</button></span>':'')+'</div>';
   if(S.view==='notes'&&S.user)h=top+notesHtml();
   else if(!S.tid){
-    h=top+'<p class="sub">Run DLS and eFootball tournaments in one place.</p>'+m;
+    h=top+'<p class="sub">Run DLS and eFootball tournaments in one place.</p>'+m+'<div class="card"><label for="ic">Have an invitation code?</label><div class="row" style="flex-wrap:nowrap"><input id="ic" maxlength="10" style="margin:0" placeholder="Enter code"><button onclick="joinCode()">Open</button></div></div>';
     if(!S.user)h+=authHtml();
     else{h+='<button onclick="S.form=!S.form;render()">'+(S.form?'Cancel':'Create tournament')+'</button><div style="height:14px"></div>';
       if(S.form)h+='<div class="card"><label for="tn">Tournament name</label><input id="tn" maxlength="40"><label for="tg">Game</label><select id="tg"><option>DLS</option><option>eFootball</option></select><label for="tm">Maximum teams</label><select id="tm"><option>4</option><option>6</option><option selected>8</option><option>16</option><option>32</option></select><button onclick="createT()">Create tournament</button></div>'}
@@ -156,19 +173,19 @@ function render(){
   else if(!S.d)h=top+'<p class="sub">Loading…</p>'+m;
   else{var d=S.d,t=d.t,u=S.user,org=u&&u.id===t.organiser_id,up=d.fx.filter(function(f){return f.status==='upcoming'}),res=d.fx.filter(function(f){return f.status!=='upcoming'});
     h=top+'<div style="height:10px"></div><button class="sm alt" onclick="home()">Back to tournaments</button><div style="height:14px"></div><div class="row"><h2>'+esc(t.name)+'</h2><span class="tag">'+t.game+'</span></div>'+
-    '<div class="row" style="margin:8px 0"><span class="mute">'+d.teams.length+' / '+t.max_teams+' teams - '+(org?'You are the organiser':'Spectator')+'</span><button class="sm alt" onclick="copyInv()">Copy invitation</button></div>'+m+
+    '<div class="row" style="margin:8px 0"><span class="mute">'+d.teams.length+' / '+t.max_teams+' teams - Code '+t.code+' - '+(org?'You are the organiser':'Spectator')+'</span><button class="sm alt" onclick="copyInv()">Copy invitation</button></div>'+m+
     '<div class="tabs">'+['teams','fixtures','results','table','rules'].map(function(k){return '<button class="'+(S.tab===k?'on':'')+'" onclick="S.tab=\''+k+'\';S.msg=\'\';render()">'+{teams:'Teams',fixtures:'Fixtures',results:'Results',table:'Table',rules:'\uD83D\uDCDC Rules'}[k]+'</button>'}).join('')+'</div>';
-    if(S.tab==='teams'){
+    if(S.tab==='teams'){h+=newsHtml(d,org);
       if(t.status==='registration'){
         if(!u)h+='<div class="card"><p>Log in to join this tournament.</p>'+authHtml().replace('<div class="card">','<div>')+'</div>';
-        else h+='<div class="card"><label for="jn">Team name</label><input id="jn" maxlength="30"><label for="ji">'+idLabel(t.game)+'</label><input id="ji" maxlength="30"><label for="jc">Country</label><input id="jc" maxlength="40"><label for="jp">Phone number (only you and the organiser can see it)</label><input id="jp" type="tel" maxlength="20">'+(org?'<label><input id="jg" type="checkbox" style="width:auto;min-height:0;margin:0 8px 0 0">Add for a player without an account</label><div style="height:12px"></div>':'')+'<button onclick="join()">Join tournament</button><p class="mute">By joining you accept the tournament rules (see the Rules tab).</p></div>'}
+        else h+='<div class="card"><label for="jn">Team name</label><input id="jn" maxlength="30"><label for="ji">'+idLabel(t.game)+'</label><input id="ji" maxlength="30"><label for="jc">Country</label><select id="jc" onchange="onCountry()">'+countryOpts()+'</select><label for="jp">Phone number (visible to players in this tournament)</label><div class="row" style="flex-wrap:nowrap"><span id="pc" class="tag g">+255</span><input id="jp" type="tel" inputmode="tel" maxlength="15" style="margin:0"></div><div style="height:12px"></div>'+(org?'<label><input id="jg" type="checkbox" style="width:auto;min-height:0;margin:0 8px 0 0">Add for a player without an account</label><div style="height:12px"></div>':'')+'<button onclick="join()">Join tournament</button><p class="mute">By joining you accept the tournament rules (see the Rules tab).</p></div>'}
       h+=d.teams.length?d.teams.map(teamCard).join(''):'<div class="empty">No teams yet. Copy the invitation and share it.</div>';
       if(org&&t.status==='registration')h+=d.teams.length>=3?'<button onclick="startT()">Close registration and create fixtures</button>':'<p class="mute">Fixtures unlock when at least 3 teams have joined.</p>'}
     else if(S.tab==='fixtures')h+=(org&&d.fx.length?'<div class="card"><h3>Schedule all matches</h3><p class="mute">Sets match time and result deadline for every match not yet played. You can still edit each match.</p><label for="as">First match date and time</label><input id="as" type="datetime-local"><label for="ap">Matches per day (one matchday each day)</label><input id="ap" type="number" min="1" value="2" inputmode="numeric"><label for="ah">Hours allowed to submit the result after match time</label><input id="ah" type="number" min="1" value="24" inputmode="numeric"><button onclick="autoSched()">Apply schedule</button></div>':'')+(up.length?up.map(fxHtml).join(''):'<div class="empty">'+(d.fx.length?'All fixtures have results. See the Results tab.':'Fixtures appear once the organiser closes registration.')+'</div>');
     else if(S.tab==='results')h+=res.length?res.map(fxHtml).join(''):'<div class="empty">No results yet.</div>';
     else if(S.tab==='rules'){h+='<div class="card"><h3>Rules and principles</h3><div style="height:8px"></div>'+(t.rules||'').split('\n').filter(Boolean).map(function(l){return '<p style="margin:0 0 8px">'+esc(l)+'</p>'}).join('')+'</div>'+(org?'<div class="card"><label for="ru">Edit rules (one per line)</label><textarea id="ru" rows="10">'+esc(t.rules||'')+'</textarea><button onclick="saveRules()">Save rules</button></div>':'')}
     else{h+='<div class="card wrap"><table><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr>'+
-      sorted(d.st).map(function(r,i){return '<tr><td>'+(i+1)+'</td><td>'+esc(r.name)+'</td><td>'+r.played+'</td><td>'+r.won+'</td><td>'+r.drawn+'</td><td>'+r.lost+'</td><td>'+r.gd+'</td><td><strong>'+r.points+'</strong></td></tr>'}).join('')+'</table></div><p class="mute">The table counts verified results only.</p><button class="sm alt" onclick="shareTable()">Copy table for WhatsApp</button>'}}
+      sorted(d.st).map(function(r,i){return '<tr><td>'+(i+1)+'</td><td>'+esc(r.name)+'</td><td>'+r.played+'</td><td>'+r.won+'</td><td>'+r.drawn+'</td><td>'+r.lost+'</td><td>'+r.gd+'</td><td><strong>'+r.points+'</strong></td></tr>'}).join('')+'</table></div><p class="mute">The table counts verified results only.</p>'+awardsHtml()+'<button class="sm alt" onclick="shareTable()">Copy table for WhatsApp</button>'}}
   el.innerHTML=h}
 
 sb.auth.onAuthStateChange(function(ev,session){S.user=session?session.user:null;S.msg='';render();if(S.tid&&S.d)loadT();loadNotes()});
