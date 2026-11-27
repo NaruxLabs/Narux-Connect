@@ -2,7 +2,13 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0F3D2E">
-<title>Narux Connect</title>
+<title>Pre NaruxConnect</title>
+<meta name="description" content="Run DLS and eFootball tournaments in one place: join, play, submit results and follow the table.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="NaruxConnect">
+<meta property="og:title" content="Pre NaruxConnect">
+<meta property="og:description" content="Join DLS and eFootball tournaments, submit results and follow the table.">
+<meta name="twitter:card" content="summary">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Figtree:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#F1F4EE;--card:#fff;--ink:#14201B;--mute:#66766D;--pitch:#0F3D2E;--on:#fff;--amber:#E8A92B;--line:#D9E0D6;--bad:#B3361F;--ok:#1E7A4D}
@@ -20,11 +26,11 @@ button{background:var(--pitch);color:var(--on);border:0;border-radius:10px;paddi
 button.alt{background:transparent;color:var(--ink);border:1px solid var(--line)}
 button.sm{min-height:36px;padding:6px 10px;font-size:14px}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
-input,select{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;min-height:44px;margin:4px 0 12px}
+input,select,textarea{width:100%;font-family:inherit;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;min-height:44px;margin:4px 0 12px}
 label{font-size:14px;color:var(--mute)}
 .tag{display:inline-block;font-size:13px;font-weight:600;padding:2px 9px;border-radius:99px;background:var(--amber);color:#2b1d00}
 .tag.g{background:var(--line);color:var(--ink)}
-.tabs{display:flex;gap:6px;margin:16px 0}.tabs button{flex:1;background:transparent;color:var(--ink);border:1px solid var(--line)}
+.tabs{display:flex;gap:6px;margin:16px 0;overflow-x:auto}.av{width:44px;height:44px;border-radius:50%;background:var(--pitch);color:var(--on);display:flex;align-items:center;justify-content:center;font-weight:800;flex:none}.tabs button{flex:1;white-space:nowrap;padding:8px 10px;background:transparent;color:var(--ink);border:1px solid var(--line)}
 .tabs button.on{background:var(--pitch);color:var(--on);border-color:var(--pitch)}
 .sc{display:flex;gap:6px;align-items:center}.sc input{width:56px;text-align:center;margin:0}
 table{width:100%;border-collapse:collapse;font-size:15px}th,td{padding:8px 4px;text-align:right;border-bottom:1px solid var(--line)}
@@ -35,7 +41,7 @@ th:nth-child(2),td:nth-child(2){text-align:left;width:38%}th{color:var(--mute);f
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/dist/umd/supabase.min.js"></script>
 <script>
 var sb=supabase.createClient('https://mmstudawujwfotiksphf.supabase.co','sb_publishable_NiA2TbTlw6_C12VfM4uGMw_VIo5b_Sg');
-var S={user:null,tid:null,tab:'teams',d:null,list:[],msg:'',form:null,auth:'login'};
+var S={user:null,tid:null,tab:'teams',d:null,list:[],msg:'',form:null,auth:'login',notes:[],unread:0,view:null};
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function $(id){return document.getElementById(id)}
 function v(id){return $(id).value.trim()}
@@ -51,11 +57,12 @@ async function loadT(){
   var r=await Promise.all([sb.from('tournaments').select('*').eq('id',id).maybeSingle(),
     sb.from('teams').select('*').eq('tournament_id',id).order('created_at'),
     sb.from('fixtures').select('*').eq('tournament_id',id).order('created_at'),
-    sb.from('standings').select('*').eq('tournament_id',id)]);
-  for(var i=0;i<4;i++)if(r[i].error)return err(r[i].error);
+    sb.from('standings').select('*').eq('tournament_id',id),
+    S.user?sb.from('team_private').select('team_id,phone'):Promise.resolve({data:[]})]);
+  for(var i=0;i<5;i++)if(r[i].error)return err(r[i].error);
   if(!r[0].data){S.msg='Tournament not found.';S.tid=null;return loadList()}
-  S.d={t:r[0].data,teams:r[1].data,fx:r[2].data,st:r[3].data};render()}
-function route(){S.tid=location.hash.slice(1)||null;S.msg='';S.tab='teams';S.tid?loadT():loadList()}
+  var pv={};(r[4].data||[]).forEach(function(x){pv[x.team_id]=x.phone});S.d={pv:pv,t:r[0].data,teams:r[1].data,fx:r[2].data,st:r[3].data};render()}
+function route(){S.view=null;S.tid=location.hash.slice(1)||null;S.msg='';S.tab='teams';S.tid?loadT():loadList()}
 function open_(id){location.hash=id}
 function home(){history.pushState('',document.title,location.pathname);route()}
 
@@ -76,14 +83,28 @@ async function createT(){
 async function join(){
   var t=S.d.t,n=v('jn'),g=v('ji');if(!n||!g)return err('Enter a team name and '+idLabel(t.game)+'.');
   var guest=$('jg')&&$('jg').checked;
-  var r=await sb.from('teams').insert({tournament_id:t.id,name:n,game_id:g,owner_id:guest?null:S.user.id});
-  if(r.error)return err(r.error.code==='23505'?'That team name or ID is already registered.':r.error);S.msg='';loadT()}
+  var r=await sb.from('teams').insert({tournament_id:t.id,name:n,game_id:g,country:v('jc')||null,owner_id:guest?null:S.user.id}).select('id').single();
+  if(r.error)return err(r.error.code==='23505'?'That team name or ID is already registered.':r.error);var ph=v('jp');if(ph){var q=await sb.from('team_private').insert({team_id:r.data.id,phone:ph});if(q.error)return err(q.error)}S.msg='';loadT()}
 async function rpc(fn,args){var r=await sb.rpc(fn,args);if(r.error)return err(r.error);S.msg='';loadT()}
 function startT(){rpc('start_tournament',{t:S.tid})}
 function submit_(f){var h=num('h'+f),a=num('a'+f);if(h===null||a===null||isNaN(h)||isNaN(a))return err('Enter both scores.');rpc('submit_result',{f:f,h:h,a:a})}
 function confirm_(f){rpc('confirm_result',{f:f})}
 function dispute(f){rpc('dispute_result',{f:f})}
 function resolve(f){var h=num('h'+f),a=num('a'+f);if(h===null||a===null)return err('Enter the final score.');rpc('resolve_result',{f:f,h:h,a:a})}
+function verify(f){rpc('verify_result',{f:f})}
+function saveRules(){sb.from('tournaments').update({rules:$('ru').value}).eq('id',S.tid).then(function(r){if(r.error)return err(r.error);S.msg='Rules saved.';loadT()})}
+async function loadNotes(){if(!S.user)return;var r=await sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(30);if(r.error)return;S.notes=r.data;S.unread=r.data.filter(function(n){return !n.read}).length;document.title=(S.unread?'('+S.unread+') ':'')+'Pre NaruxConnect';if(S.view==='notes')render();else if($('bell'))$('bell').textContent='\uD83D\uDD14 '+S.unread}
+async function toggleNotes(){if(S.view){S.view=null;render();return}S.view='notes';render();await sb.from('notifications').update({read:true}).eq('user_id',S.user.id).eq('read',false);S.unread=0;document.title='Pre NaruxConnect'}
+function notesHtml(){return '<div style="height:10px"></div><button class="sm alt" onclick="toggleNotes()">Back</button><h2 style="margin:14px 0 10px">Notifications</h2>'+(S.notes.length?S.notes.map(function(n){return '<div class="card" style="'+(n.read?'':'border-left:4px solid var(--amber)')+'"><div>'+esc(n.message)+'</div><div class="row" style="margin-top:6px"><span class="mute">'+fmt(n.created_at)+'</span>'+(n.tournament_id?'<button class="sm" onclick="S.view=null;open_(\''+n.tournament_id+'\');render()">Open</button>':'')+'</div></div>'}).join(''):'<div class="empty">No notifications yet.</div>')}
+function teamCard(x){var d=S.d,t=d.t,u=S.user,org=u&&u.id===t.organiser_id,priv=org||(u&&x.owner_id===u.id),ph=d.pv[x.id];
+  var st=d.st.find(function(r){return r.team_id===x.id}),rt=st&&st.played?Math.round(st.points/(st.played*3)*100)+'%':'-';
+  return '<div class="card"><div class="row" style="flex-wrap:nowrap;justify-content:flex-start"><div class="av">'+esc(x.name.slice(0,2).toUpperCase())+'</div><div style="flex:1;min-width:0"><strong>'+esc(x.name)+'</strong><div class="mute">'+esc(x.country||'Country not set')+' - Rating '+rt+'</div><div class="mute">'+(priv?idLabel(t.game)+': '+esc(x.game_id)+(ph?' - Phone: '+esc(ph):''):'Contact details are private')+'</div></div><span class="tag g">'+(t.status==='registration'?'Registered':'Active')+'</span>'+(org?'<button class="sm alt" onclick="removeTeam(\''+x.id+'\')">Remove</button>':'')+'</div></div>'}
+function fmt(x){return x?new Date(x).toLocaleString([],{dateStyle:'medium',timeStyle:'short'}):null}
+function iso(id){var x=$(id).value;return x?new Date(x).toISOString():null}
+function toLocal(x){if(!x)return '';var d=new Date(x),p=function(n){return String(n).padStart(2,'0')};return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())}
+function removeTeam(id){var t=S.d.teams.find(function(x){return x.id===id});if(!confirm('Remove '+t.name+'? Its fixtures will be deleted too.'))return;rpc('remove_team',{team:id})}
+function saveSched(f){var a=iso('s'+f),b=iso('d'+f);if(!a)return err('Choose the match date and time.');rpc('set_schedule',{f:f,sched:a,dl:b})}
+function autoSched(){var a=iso('as');if(!a)return err('Choose the first match date and time.');rpc('auto_schedule',{t:S.tid,first_at:a,per_day:parseInt($('ap').value,10)||1,dl_hours:parseInt($('ah').value,10)||24})}
 function copyInv(){var t=S.d.t,s=t.name+' ('+t.game+') - join here: '+location.href.split('#')[0]+'#'+t.id;
   try{navigator.clipboard.writeText(s);S.msg='Invitation copied. Paste it in WhatsApp.'}catch(e){S.msg=s}render()}
 function shareTable(){var d=S.d,rows=sorted(d.st),s=d.t.name+' - table\n';
@@ -91,20 +112,27 @@ function shareTable(){var d=S.d,rows=sorted(d.st),s=d.t.name+' - table\n';
   try{navigator.clipboard.writeText(s);S.msg='Table copied. Paste it in WhatsApp.'}catch(e){S.msg=s}render()}
 function sorted(a){return a.slice().sort(function(x,y){return y.points-x.points||y.gd-x.gd||y.gf-x.gf})}
 
-var LBL={upcoming:'Upcoming',pending:'Awaiting confirmation',disputed:'Disputed',verified:'Verified'};
+var LBL={upcoming:'Upcoming',pending:'Awaiting confirmation',confirmed:'Awaiting organiser',disputed:'Disputed',verified:'Verified'};
 function fxHtml(f){
   var d=S.d,tm={};d.teams.forEach(function(x){tm[x.id]=x});
   var H=tm[f.home_team],A=tm[f.away_team],u=S.user,org=u&&u.id===d.t.organiser_id;
   var mine=u&&(org||H.owner_id===u.id||A.owner_id===u.id);
   var inp='<div class="sc"><input id="h'+f.id+'" type="number" min="0" inputmode="numeric" aria-label="'+esc(H.name)+' score" value="'+(f.home_score==null?'':f.home_score)+'"><span>-</span><input id="a'+f.id+'" type="number" min="0" inputmode="numeric" aria-label="'+esc(A.name)+' score" value="'+(f.away_score==null?'':f.away_score)+'"></div>';
-  var b='';
-  if(f.status==='upcoming'&&mine)b=inp+'<button class="sm" onclick="submit_(\''+f.id+'\')">Submit result</button>';
-  else if(f.status==='pending'){b='<strong>'+f.home_score+' - '+f.away_score+'</strong>';
-    if(mine&&(org||f.submitted_by!==u.id))b+='<button class="sm" onclick="confirm_(\''+f.id+'\')">Confirm score</button><button class="sm alt" onclick="dispute(\''+f.id+'\')">Dispute</button>';
-    else if(mine)b+='<span class="mute">Waiting for the other side</span>'}
+  var b='',over=f.deadline_at&&new Date(f.deadline_at)<new Date();
+  if(f.status==='upcoming'&&mine&&over&&!org)b='<span class="bad">Deadline passed. Contact the organiser.</span>';
+  else if(f.status==='upcoming'&&mine)b=inp+'<button class="sm" onclick="submit_(\''+f.id+'\')">Submit result</button>';
+  else if(f.status==='pending'||f.status==='confirmed'){b='<strong>'+f.home_score+' - '+f.away_score+'</strong>';
+    var side=u&&(H.owner_id===u.id||A.owner_id===u.id);
+    if(f.status==='pending'&&side&&f.submitted_by!==u.id)b+='<button class="sm" onclick="confirm_(\''+f.id+'\')">Confirm score</button>';
+    if(mine)b+='<button class="sm alt" onclick="dispute(\''+f.id+'\')">Dispute</button>';
+    if(org)b+='<button class="sm" onclick="verify(\''+f.id+'\')">Verify result</button>';
+    else if(side&&f.status==='pending'&&f.submitted_by===u.id)b+='<span class="mute">Waiting for the other side</span>';
+    else if(side&&f.status==='confirmed')b+='<span class="mute">Waiting for the organiser</span>'}
   else if(f.status==='disputed'){b=org?inp+'<button class="sm" onclick="resolve(\''+f.id+'\')">Set final score</button>':'<span class="mute">Organiser is reviewing</span>'}
   else if(f.status==='verified')b='<strong class="ok">'+f.home_score+' - '+f.away_score+'</strong>';
-  return '<div class="card"><div class="row"><h3>'+esc(H.name)+' v '+esc(A.name)+'</h3><span class="tag g">'+LBL[f.status]+'</span></div><div class="row" style="margin-top:10px;justify-content:flex-start">'+b+'</div></div>'}
+  var when=f.scheduled_at?'<div class="mute" style="margin-top:6px">Match: '+fmt(f.scheduled_at)+(f.deadline_at?'<br>Submit result by: '+fmt(f.deadline_at):'')+'</div>':'<div class="mute" style="margin-top:6px">Date and time not set yet</div>';
+  var sch=org&&f.status==='upcoming'?'<details style="margin-top:10px"><summary>Set date and time</summary><div style="height:8px"></div><label for="s'+f.id+'">Match date and time</label><input id="s'+f.id+'" type="datetime-local" value="'+toLocal(f.scheduled_at)+'"><label for="d'+f.id+'">Submit result by</label><input id="d'+f.id+'" type="datetime-local" value="'+toLocal(f.deadline_at)+'"><button class="sm" onclick="saveSched(\''+f.id+'\')">Save schedule</button></details>':'';
+  return '<div class="card"><div class="row"><h3>'+esc(H.name)+' v '+esc(A.name)+'</h3><span class="tag g">'+LBL[f.status]+'</span></div>'+when+'<div class="row" style="margin-top:10px;justify-content:flex-start">'+b+'</div>'+sch+'</div>'}
 
 function authHtml(){var su=S.auth==='signup';
   return '<div class="card"><h3>'+(su?'Create your account':'Log in')+'</h3><div style="height:8px"></div>'+
@@ -114,8 +142,9 @@ function authHtml(){var su=S.auth==='signup';
 
 function render(){
   var el=$('app'),h='',m=S.msg?'<p class="'+(/copied|created/i.test(S.msg)?'ok':'bad')+'" role="status">'+esc(S.msg)+'</p>':'';
-  var top='<div class="row"><h1>Narux Connect</h1>'+(S.user?'<button class="sm alt" onclick="logout()">Log out</button>':'')+'</div>';
-  if(!S.tid){
+  var top='<div class="row"><h1>Narux Connect</h1>'+(S.user?'<span><button class="sm alt" id="bell" onclick="toggleNotes()">\uD83D\uDD14 '+S.unread+'</button> <button class="sm alt" onclick="logout()">Log out</button></span>':'')+'</div>';
+  if(S.view==='notes'&&S.user)h=top+notesHtml();
+  else if(!S.tid){
     h=top+'<p class="sub">Run DLS and eFootball tournaments in one place.</p>'+m;
     if(!S.user)h+=authHtml();
     else{h+='<button onclick="S.form=!S.form;render()">'+(S.form?'Cancel':'Create tournament')+'</button><div style="height:14px"></div>';
@@ -125,22 +154,25 @@ function render(){
     S.list.forEach(function(x){var c=x.teams&&x.teams[0]?x.teams[0].count:0;
       h+='<div class="card"><div class="row"><h3>'+esc(x.name)+'</h3><span class="tag">'+x.game+'</span></div><div class="row" style="margin-top:8px"><span class="mute">'+c+' / '+x.max_teams+' teams - '+(x.status==='registration'?'Registration open':x.status==='running'?'Running':'Finished')+'</span><button class="sm" onclick="open_(\''+x.id+'\')">Open</button></div></div>'})}
   else if(!S.d)h=top+'<p class="sub">Loading…</p>'+m;
-  else{var d=S.d,t=d.t,u=S.user,org=u&&u.id===t.organiser_id;
+  else{var d=S.d,t=d.t,u=S.user,org=u&&u.id===t.organiser_id,up=d.fx.filter(function(f){return f.status==='upcoming'}),res=d.fx.filter(function(f){return f.status!=='upcoming'});
     h=top+'<div style="height:10px"></div><button class="sm alt" onclick="home()">Back to tournaments</button><div style="height:14px"></div><div class="row"><h2>'+esc(t.name)+'</h2><span class="tag">'+t.game+'</span></div>'+
     '<div class="row" style="margin:8px 0"><span class="mute">'+d.teams.length+' / '+t.max_teams+' teams - '+(org?'You are the organiser':'Spectator')+'</span><button class="sm alt" onclick="copyInv()">Copy invitation</button></div>'+m+
-    '<div class="tabs">'+['teams','fixtures','table'].map(function(k){return '<button class="'+(S.tab===k?'on':'')+'" onclick="S.tab=\''+k+'\';S.msg=\'\';render()">'+{teams:'Teams',fixtures:'Fixtures',table:'Table'}[k]+'</button>'}).join('')+'</div>';
+    '<div class="tabs">'+['teams','fixtures','results','table','rules'].map(function(k){return '<button class="'+(S.tab===k?'on':'')+'" onclick="S.tab=\''+k+'\';S.msg=\'\';render()">'+{teams:'Teams',fixtures:'Fixtures',results:'Results',table:'Table',rules:'\uD83D\uDCDC Rules'}[k]+'</button>'}).join('')+'</div>';
     if(S.tab==='teams'){
       if(t.status==='registration'){
         if(!u)h+='<div class="card"><p>Log in to join this tournament.</p>'+authHtml().replace('<div class="card">','<div>')+'</div>';
-        else h+='<div class="card"><label for="jn">Team name</label><input id="jn" maxlength="30"><label for="ji">'+idLabel(t.game)+'</label><input id="ji" maxlength="30">'+(org?'<label><input id="jg" type="checkbox" style="width:auto;min-height:0;margin:0 8px 0 0">Add for a player without an account</label><div style="height:12px"></div>':'')+'<button onclick="join()">Join tournament</button></div>'}
-      h+=d.teams.length?d.teams.map(function(x){return '<div class="card row"><strong>'+esc(x.name)+'</strong>'+(org||(u&&x.owner_id===u.id)?'<span class="mute">'+idLabel(t.game)+': '+esc(x.game_id)+'</span>':'')+'</div>'}).join(''):'<div class="empty">No teams yet. Copy the invitation and share it.</div>';
+        else h+='<div class="card"><label for="jn">Team name</label><input id="jn" maxlength="30"><label for="ji">'+idLabel(t.game)+'</label><input id="ji" maxlength="30"><label for="jc">Country</label><input id="jc" maxlength="40"><label for="jp">Phone number (only you and the organiser can see it)</label><input id="jp" type="tel" maxlength="20">'+(org?'<label><input id="jg" type="checkbox" style="width:auto;min-height:0;margin:0 8px 0 0">Add for a player without an account</label><div style="height:12px"></div>':'')+'<button onclick="join()">Join tournament</button><p class="mute">By joining you accept the tournament rules (see the Rules tab).</p></div>'}
+      h+=d.teams.length?d.teams.map(teamCard).join(''):'<div class="empty">No teams yet. Copy the invitation and share it.</div>';
       if(org&&t.status==='registration')h+=d.teams.length>=3?'<button onclick="startT()">Close registration and create fixtures</button>':'<p class="mute">Fixtures unlock when at least 3 teams have joined.</p>'}
-    else if(S.tab==='fixtures')h+=d.fx.length?d.fx.map(fxHtml).join(''):'<div class="empty">Fixtures appear once the organiser closes registration.</div>';
+    else if(S.tab==='fixtures')h+=(org&&d.fx.length?'<div class="card"><h3>Schedule all matches</h3><p class="mute">Sets match time and result deadline for every match not yet played. You can still edit each match.</p><label for="as">First match date and time</label><input id="as" type="datetime-local"><label for="ap">Matches per day (one matchday each day)</label><input id="ap" type="number" min="1" value="2" inputmode="numeric"><label for="ah">Hours allowed to submit the result after match time</label><input id="ah" type="number" min="1" value="24" inputmode="numeric"><button onclick="autoSched()">Apply schedule</button></div>':'')+(up.length?up.map(fxHtml).join(''):'<div class="empty">'+(d.fx.length?'All fixtures have results. See the Results tab.':'Fixtures appear once the organiser closes registration.')+'</div>');
+    else if(S.tab==='results')h+=res.length?res.map(fxHtml).join(''):'<div class="empty">No results yet.</div>';
+    else if(S.tab==='rules'){h+='<div class="card"><h3>Rules and principles</h3><div style="height:8px"></div>'+(t.rules||'').split('\n').filter(Boolean).map(function(l){return '<p style="margin:0 0 8px">'+esc(l)+'</p>'}).join('')+'</div>'+(org?'<div class="card"><label for="ru">Edit rules (one per line)</label><textarea id="ru" rows="10">'+esc(t.rules||'')+'</textarea><button onclick="saveRules()">Save rules</button></div>':'')}
     else{h+='<div class="card wrap"><table><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr>'+
       sorted(d.st).map(function(r,i){return '<tr><td>'+(i+1)+'</td><td>'+esc(r.name)+'</td><td>'+r.played+'</td><td>'+r.won+'</td><td>'+r.drawn+'</td><td>'+r.lost+'</td><td>'+r.gd+'</td><td><strong>'+r.points+'</strong></td></tr>'}).join('')+'</table></div><p class="mute">The table counts verified results only.</p><button class="sm alt" onclick="shareTable()">Copy table for WhatsApp</button>'}}
   el.innerHTML=h}
 
-sb.auth.onAuthStateChange(function(ev,session){S.user=session?session.user:null;S.msg='';render();if(S.tid&&S.d)loadT()});
+sb.auth.onAuthStateChange(function(ev,session){S.user=session?session.user:null;S.msg='';render();if(S.tid&&S.d)loadT();loadNotes()});
+setInterval(function(){loadNotes()},30000);
 sb.auth.getSession().then(function(r){S.user=r.data.session?r.data.session.user:null;route()});
 window.addEventListener('hashchange',route);
 </script></body></html>
