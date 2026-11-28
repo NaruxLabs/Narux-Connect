@@ -56,7 +56,7 @@ function err(e){S.msg=e&&e.message?e.message:String(e);render()}
 function idLabel(g){return g==='eFootball'?'eFootball ID':'DLS ID'}
 
 async function loadList(){
-  var r=await sb.from('tournaments').select('*, teams(count)').order('created_at',{ascending:false});
+  var r=await sb.from('tournaments').select('*, teams!teams_tournament_id_fkey(count)').order('created_at',{ascending:false});
   if(r.error)return err(r.error);S.list=r.data;S.mine={};if(S.user){var q=await sb.from('teams').select('tournament_id').eq('owner_id',S.user.id);(q.data||[]).forEach(function(x){S.mine[x.tournament_id]=1})}render()}
 async function loadT(){
   var id=S.tid;
